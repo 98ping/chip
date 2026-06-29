@@ -1,0 +1,3 @@
+# Normalize line endings across Windows / macOS / Linux so clones don't show
+# noisy whole-file diffs. Git stores LF; checks out native on each platform.
+* text=auto

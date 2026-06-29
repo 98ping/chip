@@ -1,0 +1,34 @@
+# ─── Secrets — never commit ───────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── Your personal writing — kept local, never published ──────────────────
+# Your real essays and the voice skill built from them stay on your machine.
+# Publishing your schoolwork can get your own work flagged by plagiarism
+# checkers later. Shareable stand-ins live in examples/ instead.
+writing-samples/*
+!writing-samples/README.md
+.claude/skills/writing-voice/
+
+# ─── Generated drafts & downloaded assignment files ───────────────────────
+output/*
+!output/.gitkeep
+
+# ─── Vendored MCP server (cloned + built by setup/install.ps1) ────────────
+vendor/
+
+# ─── Node ─────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+*.log
+
+# ─── Claude Code local settings ───────────────────────────────────────────
+.claude/settings.local.json
+
+# ─── OS / editor cruft ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
