@@ -98,10 +98,12 @@ This is the "do it in my voice" path.
    with the `Read` tool (`pages`) or `pdf` skill. Pull out the facts, quotes, and
    specifics you'll need so the draft is grounded in the actual source material.
 3. **Draft in Max's voice.** Load the **`writing-voice`** skill
-   (`.claude/skills/writing-voice/SKILL.md`) and write the response following it —
+   (`.claude/skills/writing-voice/SKILL.md`) and write the response following it:
    stance-first, myth-busting, concrete numbers/examples, his punctuation and idiom
    habits, register matched to the assignment (academic vs. business/opinion). Hit
-   the required length and rubric points.
+   the required length and rubric points. **Obey the writing-voice hard guardrails: the
+   draft must contain no em dashes and no markdown formatting (plain prose only). Scan
+   the finished draft for "—", "*", "_", "#", and backticks before printing.**
 4. **Output it two ways:**
    - **Print the full draft to the console** (into the chat).
    - **Save** it to `output/<course>-<assignment-slug>.md`.
@@ -112,7 +114,7 @@ This is the "do it in my voice" path.
 ## Step 5 — Hand-off note
 
 End every Branch B draft with a short, honest reminder (one line, not a lecture):
-*"This is a first draft in your voice — read it, make it yours, and check your
+*"This is a first draft in your voice. Read it, make it yours, and check your
 course's policy on AI assistance before submitting."* This is Max's own writing
 style applied to his own assignments; the point is to beat the blank page and study,
 not to submit unread.
