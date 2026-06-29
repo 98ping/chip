@@ -38,7 +38,8 @@ Read `.claude/skills/canvas-homework/SKILL.md` for the full step-by-step.
   tool / `pdf` skill for PDFs. There is intentionally **no docx MCP**; it was dropped
   because the built-in skills already do the job (and it needed a Rust toolchain).
 - **Credentials**: `CANVAS_API_TOKEN`, `CANVAS_DOMAIN` (env vars + `.env`). Set by
-  `setup/install.ps1`. Never hard-code or commit them; `.env` is git-ignored.
+  `setup/install.ps1` (Windows) or `setup/install.sh` (macOS/Linux). Never hard-code or
+  commit them; `.env` is git-ignored.
 - **Never edit a downloaded assignment file.** Originals stay untouched in `output/`;
   drafts are separate files in `output/`.
 - **Integrity:** drafts are first drafts in Max's own voice to beat the blank page.
