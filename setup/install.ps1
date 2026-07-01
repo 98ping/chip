@@ -1,4 +1,4 @@
-# Chip — one-time setup
+# Chip - one-time setup
 # Clones & builds the canvas MCP, then captures your Canvas credentials.
 # Run from the project root:  powershell -ExecutionPolicy Bypass -File setup/install.ps1
 
@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 # Resolve project root (this script lives in <root>/setup)
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
-Write-Host "Chip setup — project root: $Root" -ForegroundColor Cyan
+Write-Host "Chip setup - project root: $Root" -ForegroundColor Cyan
 
 # 1. Check Node
 $node = Get-Command node -ErrorAction SilentlyContinue
@@ -26,7 +26,7 @@ if (-not (Test-Path $CanvasDir)) {
     Write-Host "`nCloning canvas-mcp..." -ForegroundColor Cyan
     git clone --depth 1 https://github.com/mbcrosiersamuel/canvas-mcp.git $CanvasDir
 } else {
-    Write-Host "`ncanvas-mcp already cloned (vendor/canvas-mcp) — skipping clone." -ForegroundColor DarkGray
+    Write-Host "`ncanvas-mcp already cloned (vendor/canvas-mcp) - skipping clone." -ForegroundColor DarkGray
 }
 
 Write-Host "`nInstalling canvas-mcp dependencies (npm install)..." -ForegroundColor Cyan
@@ -56,7 +56,7 @@ $domain = Read-Host "Your Canvas domain (e.g. canvas.youruniversity.edu, no http
 $domain = $domain.Trim() -replace '^https?://','' -replace '/+$',''
 
 if ([string]::IsNullOrWhiteSpace($token) -or [string]::IsNullOrWhiteSpace($domain)) {
-    Write-Host "Token or domain was empty — aborting before writing anything." -ForegroundColor Red
+    Write-Host "Token or domain was empty - aborting before writing anything." -ForegroundColor Red
     exit 1
 }
 
