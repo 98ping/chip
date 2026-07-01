@@ -47,17 +47,40 @@ if (Test-Path $Entry) {
 # 3. Capture credentials
 Write-Host "`n--- Canvas credentials ---" -ForegroundColor Cyan
 Write-Host "Token: Canvas -> Settings -> Approved Integrations -> + New Access Token"
-$secure = Read-Host "Paste your Canvas API token" -AsSecureString
-$bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-$token = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+Write-Host "(input stays visible so you can check the paste; it is only stored locally)" -ForegroundColor DarkGray
 
-$domain = Read-Host "Your Canvas domain (e.g. canvas.youruniversity.edu, no https://)"
-$domain = $domain.Trim() -replace '^https?://','' -replace '/+$',''
+# Keystrokes pressed while npm was running would auto-submit the first prompt.
+try { $Host.UI.RawUI.FlushInputBuffer() } catch {}
 
-if ([string]::IsNullOrWhiteSpace($token) -or [string]::IsNullOrWhiteSpace($domain)) {
-    Write-Host "Token or domain was empty - aborting before writing anything." -ForegroundColor Red
-    exit 1
+while ($true) {
+    $token = (Read-Host "Paste your Canvas API token").Trim().Trim('"').Trim("'")
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        Write-Host "Nothing was entered. Paste the token (Ctrl+V or right-click) and press Enter." -ForegroundColor Yellow
+        continue
+    }
+    if ($token -notmatch '^\d+~') {
+        Write-Host "That doesn't look like a Canvas token (they look like 1234~AbCd...)." -ForegroundColor Yellow
+        if ((Read-Host "Use it anyway? (y/N)") -notmatch '^[Yy]') { continue }
+    }
+    break
+}
+
+while ($true) {
+    $domain = (Read-Host "Your Canvas domain (e.g. canvas.youruniversity.edu, no https://)").Trim()
+    $domain = $domain -replace '^https?://','' -replace '/.*$',''
+    if ([string]::IsNullOrWhiteSpace($domain)) {
+        Write-Host "Nothing was entered. Type the domain, e.g. youruni.instructure.com." -ForegroundColor Yellow
+        continue
+    }
+    if ($domain -match '~') {
+        Write-Host "That looks like an API token, not a domain. Enter just the site address, e.g. youruni.instructure.com." -ForegroundColor Yellow
+        continue
+    }
+    if ($domain -notmatch '\.') {
+        Write-Host "That doesn't look like a domain (no dot in it). Try again." -ForegroundColor Yellow
+        continue
+    }
+    break
 }
 
 # 4. Write .env (used by scripts/canvas.mjs)
