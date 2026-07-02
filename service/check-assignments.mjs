@@ -431,14 +431,15 @@ const run = {
 };
 
 (async () => {
-  if (cmd === "--help" || cmd === "-h" || !run[cmd]) {
+  const isHelp = cmd === "--help" || cmd === "-h";
+  if (isHelp || !run[cmd]) {
     console.log("Chip assignment checker\n");
     console.log("Commands:");
     console.log("  node service/check-assignments.mjs           run one check");
     console.log("  node service/check-assignments.mjs test      send a test message");
     console.log("  node service/check-assignments.mjs list      print what's due now");
     console.log("  node service/check-assignments.mjs state     show remembered state");
-    process.exit(run[cmd] ? 0 : 1);
+    process.exit(isHelp ? 0 : 1); // help is success; an unknown command is an error
   }
   try {
     await run[cmd]();
