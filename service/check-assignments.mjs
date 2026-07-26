@@ -79,7 +79,16 @@ const STATE_FILE =
 const DRY_RUN = /^(1|true|yes)$/i.test(process.env.CHECK_DRY_RUN || "");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 const PRUNE_AFTER_DAYS = 30; // forget assignments this long past their due date
+const STATE_VERSION = 2;
+
+const REMINDER_STAGES = [
+  { key: "72h", hours: 72, label: "due within 3 days" },
+  { key: "24h", hours: 24, label: "due within 24 hours" },
+  { key: "3h", hours: 3, label: "due in the next few hours" },
+  { key: "overdue", hours: 0, label: "now overdue" },
+];
 
 // --- credential checks -----------------------------------------------------
 function requireCanvas() {
@@ -223,6 +232,18 @@ function formatDue(iso) {
   }
 }
 
+function relativeDue(iso, now) {
+  const ms = iso ? Date.parse(iso) : NaN;
+  if (Number.isNaN(ms)) return null;
+  const mins = Math.round((ms - now.getTime()) / 60000);
+  const abs = Math.abs(mins);
+  let amount;
+  if (abs < 60) amount = `${abs} min`;
+  else if (abs < 48 * 60) amount = `${Math.round(abs / 60)} hr`;
+  else amount = `${Math.round(abs / 1440)} days`;
+  return mins >= 0 ? `in ${amount}` : `${amount} overdue`;
+}
+
 // --- state (remember what we've already announced) -------------------------
 function loadState() {
   if (!existsSync(STATE_FILE)) return null;
@@ -248,12 +269,34 @@ function pruneSeen(seen) {
 }
 
 function record(seen, item) {
-  seen[keyOf(item)] = {
+  const key = keyOf(item);
+  const prior = seen[key] || {};
+  const due = dueOf(item);
+  const priorNotified = Array.isArray(prior.notified) ? prior.notified : [];
+  const rescheduled = Boolean(prior.due && due && prior.due !== due);
+  seen[key] = {
     title: titleOf(item),
     course: courseOf(item),
-    due: dueOf(item),
-    firstSeen: new Date().toISOString(),
+    due,
+    firstSeen: prior.firstSeen || new Date().toISOString(),
+    notified: rescheduled ? priorNotified.filter((k) => k === "new") : priorNotified,
   };
+}
+
+function markNotified(seen, item, keys) {
+  const entry = seen[keyOf(item)];
+  if (!entry) return;
+  const merged = new Set(entry.notified || []);
+  for (const k of keys) merged.add(k);
+  entry.notified = [...merged];
+}
+
+function reachedStages(item, now) {
+  const due = dueOf(item);
+  const ms = due ? Date.parse(due) : NaN;
+  if (Number.isNaN(ms)) return [];
+  const hoursLeft = (ms - now.getTime()) / HOUR_MS;
+  return REMINDER_STAGES.filter((s) => hoursLeft <= s.hours);
 }
 
 // --- Telegram --------------------------------------------------------------
@@ -282,8 +325,10 @@ async function sendTelegram(text) {
 }
 
 // One assignment, formatted as a message block.
-function renderItem(item) {
+function renderItem(item, now) {
   const bits = [formatDue(dueOf(item))];
+  const rel = now ? relativeDue(dueOf(item), now) : null;
+  if (rel) bits.push(rel);
   const pts = item?.plannable?.points_possible;
   if (typeof pts === "number") bits.push(`${pts} pts`);
   const url = urlOf(item);
@@ -294,15 +339,30 @@ function renderItem(item) {
 
 const MAX_LISTED = 15; // keep the message a sane length
 
-function renderNewMessage(items) {
-  const shown = items.slice(0, MAX_LISTED).map(renderItem).join("\n\n");
+function renderList(items, now) {
+  const shown = items
+    .slice(0, MAX_LISTED)
+    .map((it) => renderItem(it, now))
+    .join("\n\n");
   const extra =
     items.length > MAX_LISTED ? `\n\n…and ${items.length - MAX_LISTED} more.` : "";
+  return shown + extra;
+}
+
+function renderNewMessage(items, now) {
   const noun = items.length === 1 ? "assignment" : "assignments";
   return (
     `\u{1F43F}️ Chip — ${items.length} new ${noun} to start:\n\n` +
-    shown +
-    extra +
+    renderList(items, now) +
+    `\n\nOpen Chip and say "what do I have left?"`
+  );
+}
+
+function renderReminderMessage(stage, items, now) {
+  const noun = items.length === 1 ? "assignment" : "assignments";
+  return (
+    `\u{23F0} Chip — ${items.length} ${noun} ${stage.label}:\n\n` +
+    renderList(items, now) +
     `\n\nOpen Chip and say "what do I have left?"`
   );
 }
@@ -324,8 +384,11 @@ async function cmdRun() {
   // single friendly confirmation, rather than firing one text per assignment.
   if (!prior || !prior.seen) {
     const seen = {};
-    for (const it of actionable) record(seen, it);
-    if (!DRY_RUN) saveState({ version: 1, seen });
+    for (const it of actionable) {
+      record(seen, it);
+      markNotified(seen, it, reachedStages(it, now).map((s) => s.key));
+    }
+    if (!DRY_RUN) saveState({ version: STATE_VERSION, seen });
 
     let msg;
     if (actionable.length === 0) {
@@ -355,30 +418,69 @@ async function cmdRun() {
   }
 
   const seen = prior.seen;
-  const fresh = actionable.filter((it) => !(keyOf(it) in seen));
+  const freshKeys = new Set(
+    actionable.filter((it) => !(keyOf(it) in seen)).map(keyOf)
+  );
+  for (const it of actionable) record(seen, it);
 
-  if (fresh.length === 0) {
-    // Refresh remembered details / prune stale, but say nothing.
-    for (const it of actionable) if (keyOf(it) in seen) record(seen, it);
-    pruneSeen(seen);
-    if (!DRY_RUN) saveState({ version: 1, seen });
+  const persist = () => {
+    if (!DRY_RUN) saveState({ version: STATE_VERSION, seen });
+  };
+
+  // Sort soonest-due first so the message reads in priority order.
+  const byDue = (a, b) => new Date(dueOf(a)) - new Date(dueOf(b));
+
+  const fresh = actionable.filter((it) => freshKeys.has(keyOf(it)));
+  if (fresh.length > 0) {
+    fresh.sort(byDue);
+    // Send FIRST, then persist — so if the send fails we retry next run instead
+    // of silently swallowing the alert.
+    await sendTelegram(renderNewMessage(fresh, now));
+    for (const it of fresh) {
+      markNotified(seen, it, [
+        "new",
+        ...reachedStages(it, now).map((s) => s.key),
+      ]);
+    }
+    persist();
+  }
+
+  const buckets = new Map();
+  const owedBy = new Map();
+  for (const it of actionable) {
+    if (freshKeys.has(keyOf(it))) continue;
+    const done = new Set(seen[keyOf(it)]?.notified || []);
+    const owed = reachedStages(it, now).filter((s) => !done.has(s.key));
+    if (owed.length === 0) continue;
+    const stage = owed[owed.length - 1];
+    if (!buckets.has(stage.key)) buckets.set(stage.key, []);
+    buckets.get(stage.key).push(it);
+    owedBy.set(keyOf(it), owed.map((s) => s.key));
+  }
+
+  let reminded = 0;
+  for (const stage of [...REMINDER_STAGES].reverse()) {
+    const bucket = buckets.get(stage.key);
+    if (!bucket || bucket.length === 0) continue;
+    bucket.sort(byDue);
+    await sendTelegram(renderReminderMessage(stage, bucket, now));
+    for (const it of bucket) markNotified(seen, it, owedBy.get(keyOf(it)));
+    reminded += bucket.length;
+    persist();
+  }
+
+  pruneSeen(seen);
+  persist();
+
+  if (fresh.length === 0 && reminded === 0) {
     console.log(
       `No new assignments (${actionable.length} open, all previously seen).`
     );
     return;
   }
-
-  // Sort soonest-due first so the message reads in priority order.
-  fresh.sort((a, b) => new Date(dueOf(a)) - new Date(dueOf(b)));
-
-  // Send FIRST, then persist — so if the send fails we retry next run instead
-  // of silently swallowing the alert.
-  await sendTelegram(renderNewMessage(fresh));
-
-  for (const it of fresh) record(seen, it);
-  pruneSeen(seen);
-  if (!DRY_RUN) saveState({ version: 1, seen });
-  console.log(`Notified about ${fresh.length} new assignment(s).`);
+  console.log(
+    `Notified about ${fresh.length} new and ${reminded} due-soon assignment(s).`
+  );
 }
 
 async function cmdTest() {
@@ -404,7 +506,7 @@ async function cmdList() {
   console.log(
     `Unsubmitted assignments due in the next ${WINDOW_DAYS} days:\n`
   );
-  for (const it of items) console.log(renderItem(it) + "\n");
+  for (const it of items) console.log(renderItem(it, now) + "\n");
 }
 
 function cmdState() {
@@ -417,7 +519,8 @@ function cmdState() {
   const entries = Object.entries(state.seen);
   console.log(`Remembering ${entries.length} assignment(s):\n`);
   for (const [k, v] of entries) {
-    console.log(`  ${k}  [${v.course}] ${v.title}  (due ${v.due || "?"})`);
+    const sent = (v.notified || []).join(", ") || "nothing yet";
+    console.log(`  ${k}  [${v.course}] ${v.title}  (due ${v.due || "?"}, sent: ${sent})`);
   }
 }
 

@@ -23,13 +23,23 @@ From the **canvas** MCP server (this is its complete toolset):
   the description and any embedded file links come through cleanly.
 
 The canvas MCP **cannot download attachments.** That gap is filled by:
-- `node scripts/canvas.mjs files <courseId>` — list downloadable files in a course.
+- `node scripts/canvas.mjs assignment-files <courseId> <assignmentId>` — **start here.**
+  Finds every file linked from the assignment description, its attachments, and any file
+  sitting in the same module. Dedupes and tells you where each one came from.
+- `node scripts/canvas.mjs files <courseId> [nameFilter]` — list downloadable files in a
+  course, optionally filtered by a substring of the filename. Follows pagination, so it
+  sees past the first 100 files.
 - `node scripts/canvas.mjs download <fileId|url> [outPath]` — download one file into
   `output/` (resolves Canvas's signed download URL using the API token).
 
 Reading files (all built in — **do not** install an MCP for these):
 - `.docx` → the **`docx` skill** (extract full text; never edit the source file).
 - `.pdf` → the **`Read` tool** (use the `pages` parameter) or the **`pdf` skill**.
+
+Checking a finished draft:
+- `node scripts/lint-draft.mjs <path>` — mechanically enforces the writing-voice hard
+  guardrails (no em dashes, no markdown). Exits non-zero and prints a line:col for every
+  violation. This is not optional; see Branch B step 4.
 
 ---
 
@@ -53,12 +63,17 @@ answer), the length/format requirements, the due date, and any rubric text.
 
 ## Step 3 — Find a downloadable file (usually a DOCX)
 
-Look for an attached file two ways:
-1. **In the description** from `get_assignment` — scan for links to Canvas files
+Look for an attached file, cheapest path first:
+1. **Ask directly** — `node scripts/canvas.mjs assignment-files <courseId> <assignmentId>`.
+   This covers the two cases below in one call, including files that are only reachable
+   through the assignment's module rather than the course Files tab. Usually this is the
+   whole step.
+2. **In the description** from `get_assignment` — scan for links to Canvas files
    (URLs containing `/files/<id>` or `instructure_file_link` anchors). Grab the file
    id or URL.
-2. **In the course files** — run `node scripts/canvas.mjs files <courseId>` and look
-   for a file whose name matches the assignment (e.g. `Essay 2 Prompt.docx`).
+3. **In the course files** — run `node scripts/canvas.mjs files <courseId> <nameFilter>`
+   and look for a file whose name matches the assignment (e.g. `files 1234 essay`).
+   Drop the filter to see everything.
 
 If you find one, download it:
 ```
@@ -104,9 +119,17 @@ This is the "do it in my voice" path.
    the required length and rubric points. **Obey the writing-voice hard guardrails: the
    draft must contain no em dashes and no markdown formatting (plain prose only). Scan
    the finished draft for "—", "*", "_", "#", and backticks before printing.**
-4. **Output it two ways:**
-   - **Print the full draft to the console** (into the chat).
+4. **Save, lint, then print — in that order:**
    - **Save** it to `output/<course>-<assignment-slug>.md`.
+   - **Run the guardrail linter** on it:
+     ```
+     node scripts/lint-draft.mjs output/<course>-<assignment-slug>.md
+     ```
+     It prints a line:col for every em dash and every markdown character, and exits
+     non-zero if it finds any. Fix each one, save, and re-run until it prints `Clean`.
+     **Do not print the draft to Max until the linter passes.** Your own scan in step 3
+     is the first pass; this is the backstop, and it is the one that actually decides.
+   - **Print the full draft to the console** (into the chat).
 5. Tell Max where it saved, the word count, and which rubric requirements it covers.
 
 ---

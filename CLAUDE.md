@@ -16,15 +16,18 @@ Use the **`canvas-homework`** skill. The short version of its workflow:
 1. **List** outstanding assignments via the **canvas** MCP (`list_courses`,
    `search_assignments`). Show course → title → due date → points, soonest first.
 2. **Open** the chosen one with `get_assignment` (markdown).
-3. **Find a file** (usually a DOCX): scan the description for `/files/<id>` links,
-   and/or run `node scripts/canvas.mjs files <courseId>`. Download with
+3. **Find a file** (usually a DOCX): run
+   `node scripts/canvas.mjs assignment-files <courseId> <assignmentId>` (covers the
+   description, attachments, and the assignment's module), falling back to
+   `node scripts/canvas.mjs files <courseId> [nameFilter]`. Download with
    `node scripts/canvas.mjs download <fileId|url> output/<name>`.
 4. **Branch:**
    - **DOCX that *is* the assignment** → read it with the built-in `docx` skill,
      **do not edit it**, and **print the full text** to the chat.
    - **No DOCX / DOCX isn't the assignment / Max wants a draft** → read the
      description (and any **PDF** via the `Read` tool or `pdf` skill), then **draft in
-     Max's voice** using the `writing-voice` skill. Print it AND save to `output/`.
+     Max's voice** using the `writing-voice` skill. Save to `output/`, run
+     `node scripts/lint-draft.mjs <path>` and fix everything it flags, then print it.
 
 Read `.claude/skills/canvas-homework/SKILL.md` for the full step-by-step.
 

@@ -58,14 +58,43 @@ function requireCreds() {
 const API = () => `https://${DOMAIN}/api/v1`;
 const authHeaders = () => ({ Authorization: `Bearer ${TOKEN}` });
 
-async function apiGet(path) {
+async function apiGetRes(path) {
   const url = path.startsWith("http") ? path : `${API()}${path}`;
   const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`Canvas API ${res.status} ${res.statusText} — ${url}\n${body.slice(0, 400)}`);
   }
-  return res.json();
+  return res;
+}
+
+async function apiGet(path) {
+  return (await apiGetRes(path)).json();
+}
+
+function nextLink(res) {
+  const link = res.headers.get("link");
+  if (!link) return null;
+  for (const part of link.split(",")) {
+    const m = part.match(/<([^>]+)>\s*;\s*rel="next"/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+async function apiGetAll(path) {
+  let res = await apiGetRes(path);
+  let out = await res.json();
+  if (!Array.isArray(out)) out = [];
+  let url = nextLink(res);
+  let guard = 0;
+  while (url && guard++ < 50) {
+    res = await apiGetRes(url);
+    const page = await res.json();
+    if (Array.isArray(page)) out = out.concat(page);
+    url = nextLink(res);
+  }
+  return out;
 }
 
 // --- commands -------------------------------------------------------------
@@ -84,22 +113,96 @@ async function cmdCourses() {
   console.log(`\nUse a course ID with:  node scripts/canvas.mjs files <courseId>`);
 }
 
-async function cmdFiles(courseId) {
+function fileLabel(f) {
+  return f.display_name ?? f.filename ?? "(unnamed)";
+}
+
+async function cmdFiles(courseId, filter) {
   requireCreds();
   if (!courseId) {
-    console.error("Usage: node scripts/canvas.mjs files <courseId>");
+    console.error("Usage: node scripts/canvas.mjs files <courseId> [nameFilter]");
     process.exit(1);
   }
-  const files = await apiGet(`/courses/${courseId}/files?per_page=100`);
-  if (!Array.isArray(files) || files.length === 0) {
+  const all = await apiGetAll(`/courses/${courseId}/files?per_page=100`);
+  if (all.length === 0) {
     console.log(`No files found in course ${courseId} (or files are disabled for it).`);
     return;
   }
-  console.log(`Files in course ${courseId}:`);
+  const needle = (filter || "").toLowerCase();
+  const files = needle
+    ? all.filter((f) => fileLabel(f).toLowerCase().includes(needle))
+    : all;
+  if (files.length === 0) {
+    console.log(`No files in course ${courseId} matching "${filter}" (searched ${all.length}).`);
+    return;
+  }
+  const scope = needle ? ` matching "${filter}"` : "";
+  console.log(`Files in course ${courseId}${scope} (${files.length} of ${all.length}):`);
   for (const f of files) {
-    const name = f.display_name ?? f.filename ?? "(unnamed)";
     const type = f.content_type ?? "?";
-    console.log(`  id=${String(f.id).padEnd(10)} ${name}   [${type}]`);
+    console.log(`  id=${String(f.id).padEnd(10)} ${fileLabel(f)}   [${type}]`);
+  }
+  console.log(`\nDownload one with:  node scripts/canvas.mjs download <fileId> output/<name>`);
+}
+
+async function cmdAssignmentFiles(courseId, assignmentId) {
+  requireCreds();
+  if (!courseId || !assignmentId) {
+    console.error("Usage: node scripts/canvas.mjs assignment-files <courseId> <assignmentId>");
+    process.exit(1);
+  }
+
+  const assignment = await apiGet(`/courses/${courseId}/assignments/${assignmentId}`);
+
+  const found = new Map();
+  const add = (id, source) => {
+    if (id === undefined || id === null || id === "") return;
+    const key = String(id);
+    if (!found.has(key)) found.set(key, new Set());
+    found.get(key).add(source);
+  };
+
+  for (const m of String(assignment.description ?? "").matchAll(/\/files\/(\d+)/g)) {
+    add(m[1], "description");
+  }
+
+  for (const att of assignment.attachments ?? []) add(att.id, "attachment");
+
+  let modules = [];
+  try {
+    modules = await apiGetAll(`/courses/${courseId}/modules?include[]=items&per_page=100`);
+  } catch {
+    modules = [];
+  }
+  for (const mod of modules) {
+    const items = mod.items ?? [];
+    const owns = items.some(
+      (it) => it.type === "Assignment" && String(it.content_id) === String(assignmentId)
+    );
+    if (!owns) continue;
+    for (const it of items) {
+      if (it.type === "File") add(it.content_id, `module "${mod.name ?? mod.id}"`);
+    }
+  }
+
+  console.log(`Assignment ${assignmentId}: ${assignment.name ?? "(untitled)"}`);
+
+  if (found.size === 0) {
+    console.log(`\nNo linked files found in the description, attachments, or its module.`);
+    console.log(`Try the course file list:  node scripts/canvas.mjs files ${courseId} <nameFilter>`);
+    return;
+  }
+
+  console.log(`\nLinked files (${found.size}):`);
+  for (const [id, sources] of found) {
+    let label = `(no access to file ${id})`;
+    let type = "?";
+    try {
+      const meta = await apiGet(`/files/${id}`);
+      label = meta.display_name ?? meta.filename ?? label;
+      type = meta.content_type ?? "?";
+    } catch {}
+    console.log(`  id=${id.padEnd(10)} ${label}   [${type}]   via ${[...sources].join(", ")}`);
   }
   console.log(`\nDownload one with:  node scripts/canvas.mjs download <fileId> output/<name>`);
 }
@@ -168,7 +271,8 @@ const [cmd, ...rest] = process.argv.slice(2);
 
 const run = {
   courses: () => cmdCourses(),
-  files: () => cmdFiles(rest[0]),
+  files: () => cmdFiles(rest[0], rest[1]),
+  "assignment-files": () => cmdAssignmentFiles(rest[0], rest[1]),
   download: () => cmdDownload(rest[0], rest[1]),
 };
 
@@ -178,7 +282,8 @@ const run = {
       console.log("Chip — Canvas file helper\n");
       console.log("Commands:");
       console.log("  node scripts/canvas.mjs courses");
-      console.log("  node scripts/canvas.mjs files <courseId>");
+      console.log("  node scripts/canvas.mjs files <courseId> [nameFilter]");
+      console.log("  node scripts/canvas.mjs assignment-files <courseId> <assignmentId>");
       console.log("  node scripts/canvas.mjs download <fileId|url> [outPath]");
       process.exit(cmd ? 1 : 0);
     }
