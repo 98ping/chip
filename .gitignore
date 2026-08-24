@@ -18,6 +18,9 @@ output/*
 # ─── Vendored MCP server (cloned + built by setup/install.ps1) ────────────
 vendor/
 
+# personal skill shit
+/skills
+
 # ─── Node ─────────────────────────────────────────────────────────────────
 node_modules/
 npm-debug.log*

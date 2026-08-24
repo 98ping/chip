@@ -1,6 +1,6 @@
 # Chip
 
-Chip is Max's personal Canvas homework assistant. It does two things:
+Chip is Max's personal Canvas homework assistant. It does three things:
 
 1. **Writes in Max's voice.** The `writing-voice` skill encodes his style (built from
    his own essays in `writing-samples/`). Use it for any drafting that should sound
@@ -8,6 +8,10 @@ Chip is Max's personal Canvas homework assistant. It does two things:
 2. **Runs the Canvas homework workflow.** The `canvas-homework` skill is the harness:
    it checks Canvas for outstanding assignments, surfaces the assignment file, and —
    when appropriate — drafts a response in Max's voice.
+3. **Works MyOpenMath math sets.** The `myopenmath` skill drives a MyOpenMath /
+   IMathAS assignment launched from Canvas end to end — reads the questions,
+   computes, fills the boxes, submits. Full runbook in `tooling/MY_OPEN_MATH.md`,
+   graph reader in `tooling/myopenmath-graph.js`.
 
 ## When Max asks about assignments / homework / "what do I have left"
 
@@ -30,6 +34,13 @@ Use the **`canvas-homework`** skill. The short version of its workflow:
      `node scripts/lint-draft.mjs <path>` and fix everything it flags, then print it.
 
 Read `.claude/skills/canvas-homework/SKILL.md` for the full step-by-step.
+
+## When the assignment turns out to be MyOpenMath
+
+Canvas shows **"Submitting: an external tool"** and the tool URL is
+`myopenmath.com`. Switch to the **`myopenmath`** skill — that workflow is entirely
+different from the DOCX/PDF one above (browser automation, not file reading).
+Ask before typing answers or submitting.
 
 ## Key facts / conventions
 
