@@ -24,9 +24,11 @@ window.__C = function (qn, gi) {
   // A plot has a numeric width ("300"). Exclude "5.21ex" MathJax glyphs AND the
   // 14/16px video + magnifier icons, which are also numeric - hence the size and
   // tick-label checks. Without them, gi=1 silently returns an icon.
+  // NOTE: do not require <text> here. There are TWO renderers in the wild - the
+  // homework one labels its axes with <text>, the quiz one has none at all.
   var svgs = [].slice.call(wrap.querySelectorAll('svg')).filter(function (e) {
     var w = e.getAttribute('width') || '';
-    return /^\d+$/.test(w) && +w >= 100 && e.querySelectorAll('text').length >= 4;
+    return /^\d+$/.test(w) && +w >= 100;
   });
   var s = svgs[gi];
   if (!s) throw new Error('no plot svg at index ' + gi);
@@ -44,19 +46,37 @@ window.__C = function (qn, gi) {
     if (m && m[1] === m[2]) x0 = +m[1];
   });
 
-  // scale from the axis tick labels
+  // Scale: prefer the axis tick labels; if the renderer has none, fall back to
+  // gridline spacing, which is 1 unit in both renderers seen so far.
   var T = [].slice.call(s.querySelectorAll('text')).map(function (t) {
     return { v: parseFloat(t.textContent), x: +t.getAttribute('x'), y: +t.getAttribute('y') };
   }).filter(function (t) { return !isNaN(t.v); });
-  var tally = function (a) { return a.reduce(function (m, k) { m[k] = (m[k] || 0) + 1; return m; }, {}); };
-  var rowY = +Object.entries(tally(T.map(function (t) { return t.y; }))).sort(function (a, b) { return b[1] - a[1]; })[0][0];
-  var colX = +Object.entries(tally(T.map(function (t) { return t.x; }))).sort(function (a, b) { return b[1] - a[1]; })[0][0];
-  var xs = T.filter(function (t) { return t.y === rowY; }).sort(function (a, b) { return a.v - b.v; });
-  var ys = T.filter(function (t) { return t.x === colX; }).sort(function (a, b) { return a.v - b.v; });
-  var sx = (xs[xs.length - 1].x - xs[0].x) / (xs[xs.length - 1].v - xs[0].v);
-  var sy = (ys[ys.length - 1].y - ys[0].y) / (ys[ys.length - 1].v - ys[0].v);
-  if (x0 === null) x0 = xs[0].x - xs[0].v * sx;   // fallback only
-  if (y0 === null) y0 = ys[0].y - ys[0].v * sy;
+  var sx, sy;
+  if (T.length >= 4) {
+    var tally = function (a) { return a.reduce(function (m, k) { m[k] = (m[k] || 0) + 1; return m; }, {}); };
+    var rowY = +Object.entries(tally(T.map(function (t) { return t.y; }))).sort(function (a, b) { return b[1] - a[1]; })[0][0];
+    var colX = +Object.entries(tally(T.map(function (t) { return t.x; }))).sort(function (a, b) { return b[1] - a[1]; })[0][0];
+    var xs = T.filter(function (t) { return t.y === rowY; }).sort(function (a, b) { return a.v - b.v; });
+    var ys = T.filter(function (t) { return t.x === colX; }).sort(function (a, b) { return a.v - b.v; });
+    sx = (xs[xs.length - 1].x - xs[0].x) / (xs[xs.length - 1].v - xs[0].v);
+    sy = (ys[ys.length - 1].y - ys[0].y) / (ys[ys.length - 1].v - ys[0].v);
+    if (x0 === null) x0 = xs[0].x - xs[0].v * sx;
+    if (y0 === null) y0 = ys[0].y - ys[0].v * sy;
+  } else {
+    var vx = [];
+    paths.forEach(function (d) {
+      var re = /M ?([0-9.]+)[, ]0 ?L? ?[0-9.]+[, ]/g, m;
+      while ((m = re.exec(d))) vx.push(+m[1]);
+    });
+    vx = Array.from(new Set(vx)).sort(function (a, b) { return a - b; });
+    var gaps = [];
+    for (var k = 1; k < vx.length; k++) gaps.push(+(vx[k] - vx[k - 1]).toFixed(3));
+    gaps.sort(function (a, b) { return a - b; });
+    sx = gaps[Math.floor(gaps.length / 2)];   // median gap = 1 unit
+    sy = -sx;                                  // square grid
+    if (x0 === null) x0 = W / 2;
+    if (y0 === null) y0 = H / 2;
+  }
 
   // every polyline, in graph coordinates
   window.__all = paths.map(function (d) {

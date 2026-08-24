@@ -153,6 +153,24 @@ The mechanics that matter:
 **Enlarged Graph modal:** click the small magnifier at a graph's bottom-right for
 a large readable version. Good for a fast sanity check on what the SVG told you.
 
+### 5a. There are TWO graph renderers
+
+Confirmed on the 2.1-2.3 quiz. Detect by whether the plot SVG has `<text>` children:
+
+| | Homework renderer | Quiz renderer |
+|---|---|---|
+| Size | `width="200"`/`"300"`/`"400"` | `width="400"` |
+| Axis labels | `<text>` elements | **none** |
+| Calibration | scale from tick labels | **gridline spacing = 1 unit**, origin at centre |
+| Endpoint dots | `<circle r="4">` | drawn in the path — **no `<circle>` at all** |
+
+So: **do not filter plot SVGs on having `<text>`** — that silently rejects every
+quiz graph. And when `<circle>` comes back empty, read open-vs-closed endpoints by
+zooming the two ends; the bracket type depends on it.
+
+`myopenmath-graph.js` handles both: it prefers tick labels and falls back to
+gridline spacing.
+
 ## 6. Reading the *question* — zoom before you answer
 
 Rendered math is small and misreading it is the easiest way to lose a point:
@@ -203,6 +221,24 @@ __cls(25, 0)       // odd / even / neither for graph 0
   `#/summary`. Submit (or at minimum Save progress) before leaving a question.
 - **The summary header caches.** It can read `9 of 27` while every row below shows
   `1 of 1 pt`. Trust the per-question rows; reload for a fresh header.
+
+## 8a. Quizzes differ from homework
+
+| | Homework | Quiz |
+|---|---|---|
+| Per-question button | **Submit Question** | **Check Answer** |
+| Finalise | n/a | **Submit and End** (top bar), then an OK dialog |
+| Retries | 3 per question | often **1** per question |
+| Attempts | unlimited reattempts | **fixed** (e.g. 2), highest recorded |
+| Timer | none | e.g. **45 min**, starts on Start, never pauses |
+
+Two dialogs to expect: a "timer will not pause" confirm on Start, and an "you will
+not be able to change your answers" confirm on Submit and End.
+
+Because a timed quiz has a hard clock and few attempts, **confirm with Max before
+clicking Start** — that decision is his, and the constraints (attempts, minutes)
+are worth telling him first. Skip `#/print` here: leaving print view needs a
+reload, which costs clock time for no gain on a short quiz.
 
 ## 9. Permissions
 

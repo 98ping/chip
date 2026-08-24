@@ -12,6 +12,11 @@ Chip is Max's personal Canvas homework assistant. It does three things:
    IMathAS assignment launched from Canvas end to end — reads the questions,
    computes, fills the boxes, submits. Full runbook in `tooling/MY_OPEN_MATH.md`,
    graph reader in `tooling/myopenmath-graph.js`.
+4. **Takes Canvas-native quizzes.** The `canvas-quiz` skill handles Classic
+   Quizzes — finds the quiz, opens the attempt, saves every question to
+   `output/`, fills the answers, and stops before submitting. Runbook in
+   `tooling/CANVAS_QUIZZES.md`, page helper in `tooling/canvas-quiz.js`, CLI in
+   `scripts/canvas-quiz.mjs`.
 
 ## When Max asks about assignments / homework / "what do I have left"
 
@@ -35,19 +40,36 @@ Use the **`canvas-homework`** skill. The short version of its workflow:
 
 Read `.claude/skills/canvas-homework/SKILL.md` for the full step-by-step.
 
-## When the assignment turns out to be MyOpenMath
+## When the assignment turns out to be a quiz
 
-Canvas shows **"Submitting: an external tool"** and the tool URL is
-`myopenmath.com`. Switch to the **`myopenmath`** skill — that workflow is entirely
-different from the DOCX/PDF one above (browser automation, not file reading).
-Ask before typing answers or submitting.
+Two different kinds, and the `submission_types` tells them apart:
+
+- **`["external_tool"]` at `myopenmath.com`** (Canvas shows *"Submitting: an
+  external tool"*) → the **`myopenmath`** skill. LTI iframe, MathQuill boxes,
+  per-question submits.
+- **`["online_quiz"]` with a `quiz_id`** → the **`canvas-quiz`** skill. A
+  Canvas-native Classic Quiz: plain HTML controls on a `/take` page.
+
+Both are browser automation, not file reading — entirely different from the
+DOCX/PDF workflow above.
+
+**Ask before opening a Canvas quiz attempt, before typing answers, and before
+submitting — three separate asks.** On a 1-attempt or timed quiz, *opening the
+attempt* is the irreversible step, not the submit. Run
+`node scripts/canvas-quiz.mjs info <courseId> <quizId>` and quote the attempt
+count and time limit before asking.
 
 ## Key facts / conventions
 
 - **canvas MCP** = `mbcrosiersamuel/canvas-mcp`, vendored & built at
   `vendor/canvas-mcp/server/index.js`, configured in `.mcp.json`. It exposes only
   `list_courses`, `search_assignments`, `get_assignment` — **it cannot download
-  files.** That gap is filled by `scripts/canvas.mjs`.
+  files, and it cannot see quizzes at all.** Those gaps are filled by
+  `scripts/canvas.mjs` (files) and `scripts/canvas-quiz.mjs` (quizzes).
+- **The Canvas quizzes API index is often disabled** (`"That page has been
+  disabled for this course"`), so quizzes are discovered through the
+  **assignments** index instead. A student token also **cannot read quiz
+  questions** (403) — they exist only in the DOM of an open `/take` attempt.
 - **Reading files is built in** — use the `docx` skill for `.docx` and the `Read`
   tool / `pdf` skill for PDFs. There is intentionally **no docx MCP**; it was dropped
   because the built-in skills already do the job (and it needed a Rust toolchain).
