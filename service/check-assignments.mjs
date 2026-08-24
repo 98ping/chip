@@ -31,6 +31,7 @@
 //   STATE_FILE           optional  where to remember what it's seen
 //                                  (default: <chip>/output/.checker-state.json)
 //   CHECK_DRY_RUN        optional  "1" to compute + print but never send
+//   CHECK_DEBUG          optional  "0" to silence the per-course debug report
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -77,6 +78,7 @@ const TZ = process.env.CHECK_TZ || process.env.TZ || undefined;
 const STATE_FILE =
   process.env.STATE_FILE || join(CHIP_ROOT, "output", ".checker-state.json");
 const DRY_RUN = /^(1|true|yes)$/i.test(process.env.CHECK_DRY_RUN || "");
+const DEBUG = !/^(0|false|no|off)$/i.test(process.env.CHECK_DEBUG || "");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -166,6 +168,17 @@ async function fetchPlannerItems(startDate, endDate) {
   return canvasGetAll(`/planner/items?${qs}`);
 }
 
+async function fetchCourses() {
+  try {
+    return await canvasGetAll(
+      "/courses?enrollment_state=active&include[]=term&per_page=100"
+    );
+  } catch (err) {
+    console.log(`Course lookup failed: ${err?.message || err}`);
+    return [];
+  }
+}
+
 // --- deciding what counts --------------------------------------------------
 // "Something for Chip to start working on" = a gradable item you haven't turned
 // in, haven't been excused from, and haven't manually crossed off, that has a
@@ -181,14 +194,22 @@ function dueOf(item) {
   return item?.plannable?.due_at || item?.plannable_date || null;
 }
 
-function isActionable(item) {
-  if (!GRADABLE.has(item.plannable_type)) return false;
+function skipReason(item) {
+  if (!GRADABLE.has(item.plannable_type)) {
+    return `not gradable (${item.plannable_type || "unknown type"})`;
+  }
   const ov = item.planner_override;
-  if (ov && (ov.marked_complete || ov.dismissed)) return false;
+  if (ov && ov.marked_complete) return "marked complete";
+  if (ov && ov.dismissed) return "dismissed";
   const s = item.submissions;
-  if (s && typeof s === "object" && (s.submitted || s.excused)) return false;
-  if (!dueOf(item)) return false;
-  return true;
+  if (s && typeof s === "object" && s.excused) return "excused";
+  if (s && typeof s === "object" && s.submitted) return "already submitted";
+  if (!dueOf(item)) return "no due date";
+  return null;
+}
+
+function isActionable(item) {
+  return skipReason(item) === null;
 }
 
 function keyOf(item) {
@@ -367,6 +388,145 @@ function renderReminderMessage(stage, items, now) {
   );
 }
 
+function courseIdOf(item) {
+  return item.course_id != null ? String(item.course_id) : null;
+}
+
+function sortForDebug(items) {
+  return [...items].sort((a, b) => {
+    const da = Date.parse(dueOf(a) || "");
+    const db = Date.parse(dueOf(b) || "");
+    if (Number.isNaN(da) && Number.isNaN(db)) return 0;
+    if (Number.isNaN(da)) return 1;
+    if (Number.isNaN(db)) return -1;
+    return da - db;
+  });
+}
+
+function describeTracked(seen, key) {
+  const entry = seen && seen[key];
+  if (!entry) return "actionable, not yet in state";
+  const sent = (entry.notified || []).join(", ");
+  return sent ? `actionable, already notified: ${sent}` : "actionable, nothing sent yet";
+}
+
+function debugItemLines(item, now, seen, statusByKey) {
+  const key = keyOf(item);
+  const reason = skipReason(item);
+  const due = dueOf(item);
+  const when = due
+    ? `due ${formatDue(due)} (${relativeDue(due, now) || "unparseable date"})`
+    : "no due date";
+  const status = reason
+    ? `skipped: ${reason}`
+    : statusByKey?.get(key) || describeTracked(seen, key);
+  return [
+    `      - ${titleOf(item)}`,
+    `        ${key} | ${when} | ${status}`,
+  ];
+}
+
+function buildDebugReport(ctx) {
+  const { courses, items, actionable, now, start, end, seen, statusByKey } = ctx;
+
+  const byCourse = new Map();
+  const byOtherContext = new Map();
+  for (const item of items) {
+    const cid = courseIdOf(item);
+    const bucket = cid ? byCourse : byOtherContext;
+    const key = cid || courseOf(item);
+    if (!bucket.has(key)) bucket.set(key, []);
+    bucket.get(key).push(item);
+  }
+
+  const out = [];
+  out.push("");
+  out.push("=== debug: canvas sweep ===");
+  out.push(`domain           ${DOMAIN || "(unset)"}`);
+  out.push(
+    `window           ${formatDue(start.toISOString())} to ${formatDue(end.toISOString())} (${WINDOW_DAYS} days)`
+  );
+  out.push(`timezone         ${TZ || "(runtime default)"}`);
+  out.push(`state file       ${STATE_FILE}`);
+  out.push(`dry run          ${DRY_RUN ? "yes" : "no"}`);
+  out.push(`active courses   ${courses.length}`);
+  out.push(
+    `planner items    ${items.length} returned, ${actionable.length} actionable, ${items.length - actionable.length} skipped`
+  );
+  out.push(`remembered       ${Object.keys(seen || {}).length} assignment(s) in state`);
+
+  out.push("");
+  out.push(`courses listed in canvas (${courses.length}):`);
+  if (courses.length === 0) {
+    out.push("  (none returned by /courses, so nothing could be searched)");
+  }
+  const covered = new Set();
+  for (const course of courses) {
+    const cid = String(course.id);
+    covered.add(cid);
+    const mine = byCourse.get(cid) || [];
+    const live = mine.filter((it) => !skipReason(it));
+    const term = course.term?.name ? ` [${course.term.name}]` : "";
+    const code = course.course_code ? ` (${course.course_code})` : "";
+    out.push(`  ${cid.padEnd(8)} ${course.name || "(unnamed)"}${code}${term}`);
+    out.push(
+      `      searched: ${mine.length} planner item(s), ${live.length} actionable, ${mine.length - live.length} skipped`
+    );
+    if (mine.length === 0) {
+      out.push("      nothing in the window");
+      continue;
+    }
+    for (const it of sortForDebug(mine)) {
+      out.push(...debugItemLines(it, now, seen, statusByKey));
+    }
+  }
+
+  const strays = [...byCourse.entries()].filter(([cid]) => !covered.has(cid));
+  if (strays.length > 0 || byOtherContext.size > 0) {
+    out.push("");
+    out.push("planner items outside the active course list:");
+    for (const [cid, list] of strays) {
+      const live = list.filter((it) => !skipReason(it));
+      out.push(`  course ${cid} (not in active enrollments): ${list.length} item(s), ${live.length} actionable`);
+      for (const it of sortForDebug(list)) {
+        out.push(...debugItemLines(it, now, seen, statusByKey));
+      }
+    }
+    for (const [name, list] of byOtherContext) {
+      const live = list.filter((it) => !skipReason(it));
+      out.push(`  ${name} (no course id): ${list.length} item(s), ${live.length} actionable`);
+      for (const it of sortForDebug(list)) {
+        out.push(...debugItemLines(it, now, seen, statusByKey));
+      }
+    }
+  }
+
+  const tally = new Map();
+  for (const it of items) {
+    const reason = skipReason(it);
+    if (!reason) continue;
+    tally.set(reason, (tally.get(reason) || 0) + 1);
+  }
+  out.push("");
+  out.push(`skipped planner items by reason (${items.length - actionable.length}):`);
+  if (tally.size === 0) {
+    out.push("  (nothing was skipped)");
+  } else {
+    for (const [reason, count] of [...tally.entries()].sort((a, b) => b[1] - a[1])) {
+      out.push(`  ${String(count).padStart(4)}  ${reason}`);
+    }
+  }
+
+  out.push("=== end debug ===");
+  out.push("");
+  return out.join("\n");
+}
+
+function printDebug(ctx) {
+  if (!DEBUG) return;
+  console.log(buildDebugReport(ctx));
+}
+
 // --- commands --------------------------------------------------------------
 async function cmdRun() {
   requireCanvas();
@@ -375,10 +535,14 @@ async function cmdRun() {
   const start = new Date(now.getTime() - 1 * DAY_MS); // small grace for just-overdue
   const end = new Date(now.getTime() + WINDOW_DAYS * DAY_MS);
 
-  const items = await fetchPlannerItems(start, end);
+  const [items, courses] = await Promise.all([
+    fetchPlannerItems(start, end),
+    fetchCourses(),
+  ]);
   const actionable = items.filter(isActionable);
 
   const prior = loadState();
+  const statusByKey = new Map();
 
   // First run: adopt whatever's currently open as the baseline and send a
   // single friendly confirmation, rather than firing one text per assignment.
@@ -387,6 +551,7 @@ async function cmdRun() {
     for (const it of actionable) {
       record(seen, it);
       markNotified(seen, it, reachedStages(it, now).map((s) => s.key));
+      statusByKey.set(keyOf(it), "baselined on this first run");
     }
     if (!DRY_RUN) saveState({ version: STATE_VERSION, seen });
 
@@ -411,6 +576,7 @@ async function cmdRun() {
         `\n\nFrom here on I'll only text you about NEW ones.`;
     }
     await sendTelegram(msg);
+    printDebug({ courses, items, actionable, now, start, end, seen, statusByKey });
     console.log(
       `First run: baselined ${actionable.length} open assignment(s), sent confirmation.`
     );
@@ -441,6 +607,7 @@ async function cmdRun() {
         "new",
         ...reachedStages(it, now).map((s) => s.key),
       ]);
+      statusByKey.set(keyOf(it), "NEW, texted this run");
     }
     persist();
   }
@@ -464,13 +631,18 @@ async function cmdRun() {
     if (!bucket || bucket.length === 0) continue;
     bucket.sort(byDue);
     await sendTelegram(renderReminderMessage(stage, bucket, now));
-    for (const it of bucket) markNotified(seen, it, owedBy.get(keyOf(it)));
+    for (const it of bucket) {
+      markNotified(seen, it, owedBy.get(keyOf(it)));
+      statusByKey.set(keyOf(it), `reminder texted this run: ${stage.key} (${stage.label})`);
+    }
     reminded += bucket.length;
     persist();
   }
 
   pruneSeen(seen);
   persist();
+
+  printDebug({ courses, items, actionable, now, start, end, seen, statusByKey });
 
   if (fresh.length === 0 && reminded === 0) {
     console.log(
@@ -497,16 +669,30 @@ async function cmdList() {
   const now = new Date();
   const start = new Date(now.getTime() - 1 * DAY_MS);
   const end = new Date(now.getTime() + WINDOW_DAYS * DAY_MS);
-  const items = (await fetchPlannerItems(start, end)).filter(isActionable);
+  const [all, courses] = await Promise.all([
+    fetchPlannerItems(start, end),
+    fetchCourses(),
+  ]);
+  const items = all.filter(isActionable);
   items.sort((a, b) => new Date(dueOf(a)) - new Date(dueOf(b)));
   if (items.length === 0) {
     console.log(`No unsubmitted assignments due in the next ${WINDOW_DAYS} days.`);
-    return;
+  } else {
+    console.log(
+      `Unsubmitted assignments due in the next ${WINDOW_DAYS} days:\n`
+    );
+    for (const it of items) console.log(renderItem(it, now) + "\n");
   }
-  console.log(
-    `Unsubmitted assignments due in the next ${WINDOW_DAYS} days:\n`
-  );
-  for (const it of items) console.log(renderItem(it, now) + "\n");
+  printDebug({
+    courses,
+    items: all,
+    actionable: items,
+    now,
+    start,
+    end,
+    seen: loadState()?.seen || {},
+    statusByKey: new Map(),
+  });
 }
 
 function cmdState() {
