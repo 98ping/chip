@@ -21,8 +21,8 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 # Your numeric Telegram chat id (service/README.md explains how to find it).
 TELEGRAM_CHAT_ID=your_telegram_chat_id_here
 
-# How many days ahead to look for due assignments (default 14 if unset).
-CHECK_WINDOW_DAYS=14
+# How many days ahead to look for due assignments (default 5 if unset).
+CHECK_WINDOW_DAYS=5
 
 # IANA timezone for formatting due times in the message, e.g. America/Chicago.
 # Leave unset to use the machine's local time.

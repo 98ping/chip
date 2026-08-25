@@ -26,7 +26,7 @@
 //   CANVAS_DOMAIN        required  e.g. canvas.youruniversity.edu (no https://)
 //   TELEGRAM_BOT_TOKEN   required  from @BotFather, looks like 123456:AA...
 //   TELEGRAM_CHAT_ID     required  your numeric chat id (see service/README.md)
-//   CHECK_WINDOW_DAYS    optional  how far ahead to look (default 14)
+//   CHECK_WINDOW_DAYS    optional  how far ahead to look (default 5)
 //   CHECK_TZ             optional  IANA tz for due times, e.g. America/Chicago
 //   STATE_FILE           optional  where to remember what it's seen
 //                                  (default: <chip>/output/.checker-state.json)
@@ -73,7 +73,7 @@ const DOMAIN = (process.env.CANVAS_DOMAIN || "")
   .replace(/\/+$/, "");
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT = process.env.TELEGRAM_CHAT_ID;
-const WINDOW_DAYS = Number(process.env.CHECK_WINDOW_DAYS || 14) || 14;
+const WINDOW_DAYS = Number(process.env.CHECK_WINDOW_DAYS) || 5;
 const TZ = process.env.CHECK_TZ || process.env.TZ || undefined;
 const STATE_FILE =
   process.env.STATE_FILE || join(CHIP_ROOT, "output", ".checker-state.json");
