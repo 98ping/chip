@@ -20,6 +20,9 @@ vendor/
 
 # personal skill shit
 /skills
+/.agents
+/.claude/skills/humanizer
+/skills-lock.json
 
 # ─── Node ─────────────────────────────────────────────────────────────────
 node_modules/

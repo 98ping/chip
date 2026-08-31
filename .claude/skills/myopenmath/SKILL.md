@@ -58,5 +58,8 @@ then that covers the run. Never enter credentials anywhere.
 - **`^` and `/` trap the MathQuill caret.** Press `Right` before typing what
   belongs outside the exponent or denominator.
 - **`Tab` escapes the frame.** Move between boxes by clicking, bottom-to-top.
+- **Close the math palette before submitting.** It covers the submit button, and a
+  blind click presses its `( )` key instead — *"syntax error. Empty function input
+  or parentheses."* Re-locate the button after every layout change.
 - **Multi-part `aria-label`s can be shuffled** vs on-screen order. Map boxes by
   `getBoundingClientRect().top`.
