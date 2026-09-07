@@ -63,3 +63,43 @@ then that covers the run. Never enter credentials anywhere.
   or parentheses."* Re-locate the button after every layout change.
 - **Multi-part `aria-label`s can be shuffled** vs on-screen order. Map boxes by
   `getBoundingClientRect().top`.
+
+## Step 6 — Write the study note
+
+Every completed set gets one note in **`output/study-notes/`**, named
+`<course>-<set>.md` (`math170-2.1.md`). Write it right after the `#/summary`
+confirmation, while the questions are still in context. Reconstructing this later
+means re-opening the assignment, so do not defer it.
+
+These notes are reference material, not prose in Max's voice. Markdown headings,
+tables and LaTeX are all fine here, and the `writing-voice` guardrails do not apply.
+The subfolder also keeps them out of `scripts/lint-draft.mjs`'s default sweep, which
+only reads files sitting directly in `output/`.
+
+Four sections, in this order:
+
+**Formulas.** Every formula the set actually required, written out. Name it, state
+it, and add the one-line condition on when it applies. Skip anything you did not
+use, and do not pad with related formulas from the textbook.
+
+**Strategies.** How to recognize which tool a question wants, phrased as a trigger.
+"Asked for the domain of a radical → set the radicand ≥ 0 and solve." This is the
+section that makes the note worth keeping, so make each line a recognition rule,
+not a restatement of the formula above it.
+
+**Traps.** What was actually wrong on a first attempt, or nearly was. Bracket
+direction, a misread exponent, a domain bounded at the window edge, an arithmetic
+slip the retry counter caught. Include the wrong answer and the right one. If the
+run was clean, say so and move on.
+
+**Question index.** A table: question number, what it asked, which formula and
+strategy it used. Keep it to one line per question so the whole set is scannable.
+
+Then classify the set at the top with a `topics:` line naming the two or three
+concepts it drilled (`quadratics, vertex form, completing the square`). Reuse the
+exact wording of topics already used in the folder rather than inventing a synonym,
+because these tags are what makes a later study guide compile cleanly across sets.
+
+Tell Max the path and the topic tags when you are done. When he later asks for a
+study guide, read every note in the folder, group by topic tag rather than by set
+number, and merge duplicate formulas instead of listing one per set.
