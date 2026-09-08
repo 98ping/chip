@@ -103,3 +103,56 @@ because these tags are what makes a later study guide compile cleanly across set
 Tell Max the path and the topic tags when you are done. When he later asks for a
 study guide, read every note in the folder, group by topic tag rather than by set
 number, and merge duplicate formulas instead of listing one per set.
+
+## The `-sbs` flag — show the work
+
+When Max ends a message with **`-sbs`**, the run changes in one way: before you fill
+each question's boxes, write the solution out to him the way you would work it on
+paper. Everything else about the run is unchanged, and the flag stays in force for the
+whole assignment, not just the first question.
+
+One block per question, posted as you reach that question rather than saved up for the
+end. The point is that he can follow along and check you, so the block has to be
+readable on its own without the assignment open next to it.
+
+What a block contains:
+
+**The question, restated with its actual numbers.** `Q9. f(x) = (15x - 60)/(x^2 - 3x - 4)`
+
+**Every algebra step on its own line, in order, with nothing skipped.** Show the
+factoring, the cancelling, the substitution, the arithmetic. This is the part he is
+reading, so do not compress three manipulations into one line and do not narrate a step
+in prose that you could just write out.
+
+```
+15x - 60          15(x - 4)
+------------  =  --------------
+x^2 - 3x - 4     (x - 4)(x + 1)
+
+(x - 4) cancels    ->  hole at x = 4
+remaining:  15/(x + 1)
+hole y-value:  15/(4 + 1) = 3      ->  (4, 3)
+```
+
+**A one-line reason wherever a step follows from a rule rather than from arithmetic.**
+"degrees 1 < 2, so HA is y = 0" or "even multiplicity, so it bounces". Keep it to the
+clause; the rule itself belongs in the study note, not here.
+
+**The final answer per part, labelled to match the boxes on screen**, so he can see
+which value is going where.
+
+Rules for these blocks:
+
+- Plain text math, laid out in a code fence so the fractions and alignment survive.
+  This is working, not prose, so the `writing-voice` guardrails do not apply.
+- Show the work you actually used. If you read a value off a graph's SVG, say that and
+  give the numbers you sampled, rather than inventing an algebraic derivation you did
+  not perform.
+- A wrong first attempt gets its own short block: what you entered, what the page said,
+  and what you changed. Those are the most useful ones to him.
+- Skip the block for a question that is genuinely a single lookup with no working, but
+  say so in one line rather than staying silent on it.
+
+At the end of an `-sbs` run the study note (section 6) is still written as normal. The
+two serve different purposes: the blocks are for following the run live, the note is
+for revising later.
