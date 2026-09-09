@@ -17,6 +17,11 @@ Chip is Max's personal Canvas homework assistant. It does three things:
    `output/`, fills the answers, and stops before submitting. Runbook in
    `tooling/CANVAS_QUIZZES.md`, page helper in `tooling/canvas-quiz.js`, CLI in
    `scripts/canvas-quiz.mjs`.
+5. **Works MyLab / Pearson sets.** The `mylab-pearson` skill drives a Pearson
+   MyLab (MathXL) homework or quiz — popup launch, promoting the player out of
+   its iframe, the custom math answer boxes, graphs read from their alt text.
+   Runbook in `tooling/MYLAB_PEARSON.md`, page helper in
+   `tooling/mylab-pearson.js`.
 
 ## When Max asks about assignments / homework / "what do I have left"
 
@@ -49,6 +54,9 @@ Two different kinds, and the `submission_types` tells them apart:
   per-question submits.
 - **`["online_quiz"]` with a `quiz_id`** → the **`canvas-quiz`** skill. A
   Canvas-native Classic Quiz: plain HTML controls on a `/take` page.
+- **Hosted at `mylabmastering.pearson.com` / `mylab.pearson.com`** → the
+  **`mylab-pearson`** skill. Launches via a popup that must be dragged into the
+  MCP tab group, then the player is promoted out of its iframe.
 
 Both are browser automation, not file reading — entirely different from the
 DOCX/PDF workflow above.
