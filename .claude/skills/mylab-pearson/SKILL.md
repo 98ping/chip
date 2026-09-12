@@ -42,10 +42,16 @@ date and ask before you start. Never enter credentials.
 4. **Scope it**: question count, points, due date, and whether tries are limited.
 
 5. **Per part**: `__ML.q()` to read → `__ML.openFig()` + `__ML.fig()` for any
-   figure → compute → click the **left edge** of the box and type → verify with
-   `__ML.fields()` → `__ML.hit(/^Check answer/)`.
+   figure, or `__ML.table()` + `__ML.stats()` for a data table (§14) → compute →
+   click the **left edge** of the box and type → verify with `__ML.fields()` →
+   wait 1s (§16) → `__ML.hit(/^Check answer/)`. Batch the whole part (fill, wait,
+   check, screenshot) into one `browser_batch` call rather than one tool call
+   per step.
 
-6. **Confirm** with `__ML.score()`, then `__ML.hit(/^Next/)`.
+6. **Confirm** with `__ML.score()`, then `__ML.hit(/^Next/)`. If the question
+   finished with partial credit, click **"See similar"** and redo it on a fresh
+   instance for full credit (§18) — this is the default, not something to ask
+   about each time.
 
 7. **Write the study note** into `output/study-notes/<course>-<set>.md`, same
    format as the `myopenmath` skill's step 6: a `topics:` line, then Formulas,
@@ -76,3 +82,14 @@ date and ask before you start. Never enter credentials.
 - A frequency polygon's first and last points are **zero anchors**, not classes.
 - On an ogive, "p% below" reads x at y = p/100; "p% above" reads x at y = 1−p/100.
 - Ties are real — when two candidates tie, MyLab wanted the **later** one.
+- **Read each box's rounding instruction literally.** "Round to two decimal
+  places" wants `__ML.preciseRound()`; "Do not round" wants the exact
+  `__ML.stats()` value — don't blanket-round every box in a question the same
+  way (§15).
+- **A rejected mean/median that survives triple-checked extraction may be a
+  data-generation quirk**, not your error: the displayed table can hide decimal
+  precision. A `+$0.01` retry has worked twice for a mean; for a median, don't
+  guess blind — use "See similar" instead (§17, §18 in the runbook).
+- **"Help me solve this" can regenerate the question's data**, silently
+  invalidating already-correct parts. Avoid it; re-extract fresh if it's used
+  (§19).

@@ -118,6 +118,43 @@ window.__ML = (function () {
     return (document.body.innerText.match(/My score:[^\n]*/) || [''])[0];
   }
 
+  function preciseRound(x, d) {
+    var f = Math.pow(10, d);
+    return Math.round((x * f).toPrecision(15)) / f;
+  }
+
+  function cellNum(cell) {
+    var parts = (cell.innerText || '').split('\n').filter(function (x) { return x.trim() !== ''; });
+    var s = (parts[parts.length - 1] || '').replace(/,/g, '').replace(/−/g, '-').trim();
+    return Number(s);
+  }
+
+  function table(idx) {
+    var tables = document.querySelectorAll('table');
+    var t = tables[idx === undefined ? tables.length - 1 : idx];
+    if (!t) return { header: [], rows: [] };
+    var rows = t.querySelectorAll('tr');
+    var header = [].slice.call(rows[0].querySelectorAll('td,th')).map(function (c) { return (c.innerText || '').trim(); });
+    var out = [];
+    for (var i = 1; i < rows.length - 1; i++) {
+      var cells = rows[i].querySelectorAll('td');
+      if (!cells.length) continue;
+      var firstCell = (cells[0].innerText || '').split('\n')[0].trim();
+      if (header.length && firstCell === header[0]) continue;
+      out.push([].slice.call(cells).map(cellNum));
+    }
+    return { header: header, rows: out };
+  }
+
+  function stats(arr) {
+    var a = arr.slice().sort(function (x, y) { return x - y; });
+    var n = a.length;
+    var sum = a.reduce(function (x, y) { return x + y; }, 0);
+    var mean = sum / n;
+    var median = n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
+    return { n: n, sum: sum, mean: mean, median: median, sorted: a };
+  }
+
   function hookPopups() {
     if (window.__popHooked) return 'already';
     window.__popHooked = true;
@@ -151,5 +188,6 @@ window.__ML = (function () {
 
   return { K: K, SW: function (w) { SW = w; return SW; }, fields: fields, btns: btns, hit: hit,
            radios: radios, boxes: boxes, drops: drops, tries: tries, q: q, fig: fig,
-           openFig: openFig, score: score, hookPopups: hookPopups, dump: dump };
+           openFig: openFig, score: score, hookPopups: hookPopups, dump: dump,
+           preciseRound: preciseRound, table: table, stats: stats };
 })();
