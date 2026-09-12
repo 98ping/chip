@@ -332,10 +332,15 @@ credit**, without waiting to be asked each time. This applies going forward for
 the whole assignment, not just the question where it first came up. Two
 caveats:
 
-- The **original instance's score is what's recorded** for that question slot —
-  clicking "See similar" does not erase the partial-credit attempt, it adds a
-  new attempt at fresh data. Confirm which score MyLab keeps (the higher one, in
-  every case observed) before assuming the retry actually helped.
+- **MyLab keeps whatever the most recent attempt scored — not the higher of the
+  two.** Confirmed both ways in one session: a 0.92/1 question retried down to
+  0.83/1 (the fresh instance had its own bad luck on a figure-matching part) and
+  the *lower* score is what stuck in the gradebook and the running total. Do not
+  assume "See similar" is risk-free. It is a genuine gamble on any part whose
+  correctness you cannot verify with certainty before submitting (graphs and
+  histograms especially, per the next point) — for a question that's already at
+  0.8+ out of 1, weigh whether the expected gain is worth the realistic chance of
+  a net loss, rather than applying the policy mechanically to every non-1.0 score.
 - Don't loop indefinitely on one stubborn question. If a second fresh instance
   *also* hits a data-generation quirk like §17, stop after that second attempt,
   note it in the study note, and move on — the point value of one sub-part does
@@ -345,8 +350,65 @@ caveats:
 
 Clicking **"Help me solve this"** can silently **regenerate the entire
 question's randomized dataset**, resetting every previously-correct part's
-answer along with it. Discovered by using it once on a partially-answered
-question: parts 1-3 were already correct, and after clicking it the table had
-new numbers and parts 1-3 had to be redone from scratch. Prefer working the
-question directly from `__ML.q()` / `__ML.table()` / `__ML.fig()`; treat this
-button as a last resort, and re-extract the table fresh afterward if it is used.
+answer along with it. Discovered twice: once using it deliberately on a
+partially-answered question (parts 1-3 were already correct; after clicking it
+the table had new numbers and parts 1-3 had to be redone from scratch), and
+once from a single **stray click that only opened the confirmation dialog**
+(never clicked "Continue" inside it) — closing the dialog with the X still lost
+the just-submitted Part 1 answer and dropped the running score. Merely opening
+the panel is enough to trigger the reset on some question templates; don't
+treat "I didn't click Continue" as safe. Prefer working the question directly
+from `__ML.q()` / `__ML.table()` / `__ML.fig()`; treat this button (and its
+neighbors — "AI Study Tool", "Get more help" — anything in that bottom-bar
+cluster) as things to click deliberately or not at all, never as a
+`browser_batch` click coordinate reused from a different part's layout. If it's
+used or triggered by accident, re-extract the table fresh and re-verify every
+previously "correct" part before trusting it's still recorded.
+
+## 20. Histogram/graph multiple-choice options are not reliably identifiable by eye
+
+For "choose the correct histogram" questions built from the current instance's
+own data (not a fixed textbook figure), the four thumbnail options are small,
+similarly-shaped, and shuffled per part — visual matching by peak position,
+tail length, or an "isolated far bar" was **wrong as often as right** across a
+19-question stretch, even after computing the exact expected bin counts from
+`__ML.table()` first. One question's consumer-vs-industrial matching failed on
+try 1 (a well-reasoned guess) and only succeeded by testing systematically; a
+later "See similar" instance of the same question failed on both parts anyway
+(§18's cautionary tale). If you must guess, spend at most 2 tries reasoning
+from computed bin counts (position of the peak relative to axis fractions,
+number of visible bars) rather than pixel impressions from a screenshot, and
+accept that this sub-part may end up wrong — it's rarely worth more than one
+part of a multi-part question, and a `+/-1` letter guess is not worth burning
+"See similar" tries to fix.
+
+## 21. Data tables aren't all shaped the same — verify before trusting `__ML.table()`
+
+Three different table shapes showed up in this HW set, and `__ML.table()`
+(built for the tornado-style header+data+duplicate-footer layout) silently
+mis-parses the ones that don't match:
+
+- **No duplicate footer row**: a plain `n` rows + 1 header table (e.g. a
+  pulse-rate list of named students) has `__ML.table()` drop the *real* last
+  data row, because the function assumes row `rows.length-1` is a repeated
+  header and excludes it. Caught only by noticing the extracted count (8) was
+  one short of the stated sample size (9). **Always check `rows.length` against
+  the "n" stated in the question stem before trusting the extraction.**
+- **Side-by-side repeated column groups via `colSpan`**: a table headed
+  "Bond mutual funds | Stock mutual funds" (or State/F-Scale/PropLoss/Length ×
+  multiple groups) uses `colSpan` on the header cells to mark which raw
+  columns belong to which group — `__ML.table()`'s per-row array doesn't
+  reflect that grouping. Read `header.colSpan` per cell first, then index the
+  correct sub-range of `cells[]` for each group when flattening to a single
+  array per variable.
+- **Two-column "State | Length" pairs repeated across the row** (e.g. the
+  tornado state/length table): each row holds two independent
+  state-length observations, not one row per observation. Push both
+  `cells[0]`/`cells[1]` and `cells[3]`/`cells[4]` per row, and filter by the
+  state name in `cells[0]`/`cells[3]` when you need a single state's subset
+  (e.g. just Texas or just Wyoming) rather than the whole column.
+
+The safe habit: after any `__ML.table()`-style extraction, print `header` with
+`colSpan`, print the row count, and cross-check the total observation count
+against whatever "n" or "sample size" the question states, before computing
+anything from the data.

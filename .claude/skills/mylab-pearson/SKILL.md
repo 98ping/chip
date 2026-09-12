@@ -49,9 +49,11 @@ date and ask before you start. Never enter credentials.
    per step.
 
 6. **Confirm** with `__ML.score()`, then `__ML.hit(/^Next/)`. If the question
-   finished with partial credit, click **"See similar"** and redo it on a fresh
-   instance for full credit (§18) — this is the default, not something to ask
-   about each time.
+   finished with partial credit, the default is to click **"See similar"** and
+   redo it on a fresh instance — but MyLab keeps whichever attempt's score is
+   most recent, **not the higher one** (§18), so skip the retry on a
+   graph/histogram-matching part you can't verify with confidence, or on a
+   question already scoring 0.8+.
 
 7. **Write the study note** into `output/study-notes/<course>-<set>.md`, same
    format as the `myopenmath` skill's step 6: a `topics:` line, then Formulas,
@@ -90,6 +92,17 @@ date and ask before you start. Never enter credentials.
   data-generation quirk**, not your error: the displayed table can hide decimal
   precision. A `+$0.01` retry has worked twice for a mean; for a median, don't
   guess blind — use "See similar" instead (§17, §18 in the runbook).
-- **"Help me solve this" can regenerate the question's data**, silently
-  invalidating already-correct parts. Avoid it; re-extract fresh if it's used
-  (§19).
+- **"Help me solve this" can regenerate the question's data** from a single
+  stray click on the panel — even without clicking "Continue" inside it —
+  silently invalidating already-correct parts. Avoid it; re-extract fresh and
+  re-verify prior parts if it's triggered by accident (§19).
+- **Histogram/graph multiple-choice options built from the current instance's
+  own data are not reliably identifiable by eye** — peak position and tail
+  shape guessing was wrong about as often as right across a long HW set, even
+  after computing exact bin counts first. Budget at most 2 tries per such part
+  and accept the loss rather than burning "See similar" attempts on it (§20).
+- **Verify a data table's shape before trusting `__ML.table()`** — it assumes a
+  duplicate footer row and single-column-per-variable layout that not every
+  table has. Check `rows.length` against the question's stated sample size, and
+  check header `colSpan` for side-by-side repeated column groups, before
+  computing anything (§21).
