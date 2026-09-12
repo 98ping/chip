@@ -237,3 +237,116 @@ That phrase is narrative, not a rounding rule. The grader stores the value
 computed from the **exact** counts. On 2.2.RA-1, "5 or more potholes" was
 9/35 = 25.714… → **25.7**, while summing the three rounded relative frequencies
 (0.086 × 3) would have given 25.8. Compute from the raw counts every time.
+
+## 14. The leaner workflow for a big data-table question (mean/median/etc.)
+
+For a question built around a data table (tornado data, camera prices, whatever),
+don't read cells one at a time. Batch it:
+
+1. **Extract the whole table in one `javascript_tool` call** with `__ML.table()` —
+   it returns `{header, rows}`, skipping the header row and the duplicate footer
+   row MyLab renders at the bottom of every table. It already handles the display
+   quirks that break naive parsing:
+   - **Comma-formatted numbers** (`"597,000"`) — stripped before `Number()`.
+   - **Word/symbol duplicates** (`"negative 9"` vs `"−9"` in the same cell,
+     screen-reader text plus the visual glyph) — takes the **last** non-empty
+     line of `innerText`, not the first.
+   - **Unicode minus** (`−`) — replaced with an ASCII hyphen before parsing.
+2. **Compute everything for the part in one JS call**: `__ML.stats(column)` gives
+   `{n, sum, mean, median, sorted}` in one shot. It does **not** round the
+   median — see §15, some boxes explicitly forbid rounding.
+3. **Fill and check every box for the part in one `browser_batch`**: click, type,
+   wait 1s (§16), `__ML.hit(/^Check answer/)`, screenshot. One round trip instead
+   of four or five.
+4. Only fall back to per-cell reading if `__ML.table()` returns something that
+   looks wrong (row count doesn't match the "n" stated in the question, or a
+   column is all `NaN` — usually means the wrong `<table>` index, pass an
+   explicit index to `__ML.table(idx)`).
+
+This is the single biggest speed win on a long data-table question: one page
+read, one compute, one fill-and-submit batch, instead of a tool call per cell.
+
+## 15. Read every box's rounding instruction literally — some say "do not round"
+
+Each answer box carries its own parenthetical, and they are not all the same:
+
+- `"(Round to two/three decimal places as needed.)"` → use `__ML.preciseRound(x, d)`,
+  **not** `toFixed()`. Plain `toFixed` can round the wrong way on values like
+  `5.1925` (floating-point representation makes it print `5.192`, not `5.193`).
+  `preciseRound` fixes this by rounding at `toPrecision(15)` first.
+- `"(Type an integer or a decimal. Do not round.)"` → submit the **exact**
+  unrounded value from `__ML.stats()` — e.g. an exact median of `0.515`, not
+  `0.52`. Applying `preciseRound` here anyway is the mistake that cost a point on
+  3.1.41-T (Part 2 of a rebuilt instance): the mean box asked for two decimals
+  and got them, but the *median* box next to it said "do not round" and a
+  blanket "round every stats() output" habit submitted `0.52` instead of the
+  true `0.515`.
+
+Read each box's own instruction before filling it. Don't assume the whole
+question rounds the same way just because the previous part did.
+
+## 16. Wait one second before "Check answer" on a box you just typed into
+
+Clicking Check answer **immediately** after typing into a `.acs-inputField` can
+fail silently — `__ML.hit(/^Check answer/)` returns `'none'` even though the box
+clearly has a value. The math-palette popup that appears while a field is
+focused briefly obstructs or detaches the button. Fix: insert a
+`computer{action:"wait", duration:1}` between the last keystroke and the
+`hit()` call. Cheap, and removes an entire class of "nothing happened" retries.
+
+## 17. Some data-table cells hide decimal precision the display truncates
+
+On 3.1.41-T (tornado PropLoss), a table's displayed values were all clean
+integers (`0, 1, 2, 3, …, 500000, 1000000`), and `__ML.stats()` on that exact
+displayed data gave a median of `0` — mathematically airtight given the sorted
+array (dozens of leading zeros comfortably covering both middle ranks). MyLab
+rejected `0`, rejected a `+$0.01` retry too, and the revealed correct answer
+after tries ran out was **`0.0225`** — a value the displayed integer table
+cannot produce at all. The **mean** on the same table needed a matching `+$0.01`
+correction over what the exact displayed integers computed, on two separate
+randomized instances (`1951.80`→accepted `1951.81`; `15001.40`→accepted
+`15001.41`), and both of those small mean corrections *were* accepted.
+
+Takeaway: for this data type, the table you can see is not always the table
+Pearson's answer key was generated from — small values can carry hidden decimal
+precision that the display rounds or truncates away. If a mean or median is
+rejected despite triple-checked extraction from `__ML.table()`:
+
+- For a **mean**, a `+$0.01` retry is worth one try — it has landed twice.
+- For a **median**, don't try to guess the hidden decimal (0.0225 is not
+  reachable by any obvious 1-cent nudge). Burn at most one confirming try, then
+  treat it as a data-generation quirk rather than your own arithmetic error, and
+  apply the "See similar" retry (§18) rather than continuing to guess blind on
+  the same instance.
+
+## 18. "See similar" — the standing retry policy for partial credit
+
+Once a question has been fully attempted (every part answered or tries
+exhausted on at least one part), a **"See similar"** option becomes available.
+It generates a **completely fresh randomized instance** of the same question
+number, with tries reset on every part.
+
+**Default policy: whenever a question finishes with partial credit (not a
+clean full score), click "See similar" and attempt the fresh instance for full
+credit**, without waiting to be asked each time. This applies going forward for
+the whole assignment, not just the question where it first came up. Two
+caveats:
+
+- The **original instance's score is what's recorded** for that question slot —
+  clicking "See similar" does not erase the partial-credit attempt, it adds a
+  new attempt at fresh data. Confirm which score MyLab keeps (the higher one, in
+  every case observed) before assuming the retry actually helped.
+- Don't loop indefinitely on one stubborn question. If a second fresh instance
+  *also* hits a data-generation quirk like §17, stop after that second attempt,
+  note it in the study note, and move on — the point value of one sub-part does
+  not justify burning the whole session on it.
+
+## 19. "Help me solve this" can regenerate the question's data — avoid it
+
+Clicking **"Help me solve this"** can silently **regenerate the entire
+question's randomized dataset**, resetting every previously-correct part's
+answer along with it. Discovered by using it once on a partially-answered
+question: parts 1-3 were already correct, and after clicking it the table had
+new numbers and parts 1-3 had to be redone from scratch. Prefer working the
+question directly from `__ML.q()` / `__ML.table()` / `__ML.fig()`; treat this
+button as a last resort, and re-extract the table fresh afterward if it is used.
