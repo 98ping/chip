@@ -341,6 +341,9 @@ caveats:
   histograms especially, per the next point) — for a question that's already at
   0.8+ out of 1, weigh whether the expected gain is worth the realistic chance of
   a net loss, rather than applying the policy mechanically to every non-1.0 score.
+  This risk is specific to parts you can't verify exactly before submitting —
+  once §20's `__ML.histAlt()` technique made histogram parts exact rather than
+  guessed, a later retry of this same question scored a clean 1.0/1.
 - Don't loop indefinitely on one stubborn question. If a second fresh instance
   *also* hits a data-generation quirk like §17, stop after that second attempt,
   note it in the study note, and move on — the point value of one sub-part does
@@ -365,22 +368,43 @@ cluster) as things to click deliberately or not at all, never as a
 used or triggered by accident, re-extract the table fresh and re-verify every
 previously "correct" part before trusting it's still recorded.
 
-## 20. Histogram/graph multiple-choice options are not reliably identifiable by eye
+## 20. Histogram multiple choice: read `__ML.histAlt()`, don't eyeball the thumbnail
 
-For "choose the correct histogram" questions built from the current instance's
-own data (not a fixed textbook figure), the four thumbnail options are small,
-similarly-shaped, and shuffled per part — visual matching by peak position,
-tail length, or an "isolated far bar" was **wrong as often as right** across a
-19-question stretch, even after computing the exact expected bin counts from
-`__ML.table()` first. One question's consumer-vs-industrial matching failed on
-try 1 (a well-reasoned guess) and only succeeded by testing systematically; a
-later "See similar" instance of the same question failed on both parts anyway
-(§18's cautionary tale). If you must guess, spend at most 2 tries reasoning
-from computed bin counts (position of the peak relative to axis fractions,
-number of visible bars) rather than pixel impressions from a screenshot, and
-accept that this sub-part may end up wrong — it's rarely worth more than one
-part of a multi-part question, and a `+/-1` letter guess is not worth burning
-"See similar" tries to fix.
+**Every histogram answer-choice thumbnail carries a hidden, exact `aria-label`**
+on a `div` ancestor of the chart, one per option, in the same DOM order as the
+visual A/B/C/D layout (confirmed by testing all four positions against
+independently-computed bin counts). The label spells out the full bar-by-bar
+data:
+
+> "A relative frequency histogram has a horizontal axis labeled Return
+> (percent) from negative 50 to 150 in increments of 10 … The approximate
+> heights of the bars are as follows, where the horizontal axis label is
+> listed first and the approximate height is listed second: negative 40,
+> 0.011; negative 30, 0.078; …"
+
+Use it instead of visual matching:
+
+1. Extract the raw data (`__ML.table()` + `__ML.stats()`, or from the opened
+   figure), and compute your own relative-frequency bin counts for the class
+   width/start the question specifies.
+2. `__ML.histAlt()` returns every histogram `aria-label` currently in the DOM,
+   in order. For a two-part question (e.g. one histogram choice per sector),
+   the first 4 belong to part 1's options, the next 4 to part 2's — slice
+   accordingly.
+3. `__ML.histBars(alt)` parses one label into `[[x, relFreq], ...]` pairs.
+   Compare against your computed bins — the correct option matches exactly
+   (Pearson's distractors are typically the *same* shape shifted along the
+   x-axis by a fixed offset, not a different shape, so check the starting
+   x-value and the full sequence, not just "does it look similar").
+4. This is exact, not approximate — treat a match as confirmed, not a
+   best-guess. It replaced a policy of budgeting 2 tries and accepting
+   the loss on this part; a live retry (3.2.29-T, "See similar") that used
+   this method scored the full 8/8 parts (1.0/1) where visual guessing had
+   previously produced 0.83 and, before that, 0.92.
+
+Fall back to visual comparison (peak position, tail length as fractions of the
+axis span) only if no `aria-label` is present on that option — this has not
+been observed yet in this course but may vary by question template.
 
 ## 21. Data tables aren't all shaped the same — verify before trusting `__ML.table()`
 

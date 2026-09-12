@@ -155,6 +155,26 @@ window.__ML = (function () {
     return { n: n, sum: sum, mean: mean, median: median, sorted: a };
   }
 
+  function histAlt() {
+    var out = [];
+    document.querySelectorAll('div[aria-label]').forEach(function (e) {
+      var al = e.getAttribute('aria-label') || '';
+      if (/histogram/i.test(al)) out.push(al);
+    });
+    return out;
+  }
+
+  function histBars(alt) {
+    var m = alt.match(/height is listed second:\s*(.+)\.\s*$/);
+    if (!m) return [];
+    return m[1].split(';').map(function (pair) {
+      var parts = pair.split(',');
+      var x = Number(parts[0].trim().replace(/negative\s*/i, '-'));
+      var y = Number(parts[1].trim());
+      return [x, y];
+    });
+  }
+
   function hookPopups() {
     if (window.__popHooked) return 'already';
     window.__popHooked = true;
@@ -189,5 +209,6 @@ window.__ML = (function () {
   return { K: K, SW: function (w) { SW = w; return SW; }, fields: fields, btns: btns, hit: hit,
            radios: radios, boxes: boxes, drops: drops, tries: tries, q: q, fig: fig,
            openFig: openFig, score: score, hookPopups: hookPopups, dump: dump,
-           preciseRound: preciseRound, table: table, stats: stats };
+           preciseRound: preciseRound, table: table, stats: stats,
+           histAlt: histAlt, histBars: histBars };
 })();

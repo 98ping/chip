@@ -51,9 +51,10 @@ date and ask before you start. Never enter credentials.
 6. **Confirm** with `__ML.score()`, then `__ML.hit(/^Next/)`. If the question
    finished with partial credit, the default is to click **"See similar"** and
    redo it on a fresh instance — but MyLab keeps whichever attempt's score is
-   most recent, **not the higher one** (§18), so skip the retry on a
-   graph/histogram-matching part you can't verify with confidence, or on a
-   question already scoring 0.8+.
+   most recent, **not the higher one** (§18), so skip the retry on a part you
+   can't verify with confidence before submitting — histogram parts now can be,
+   via `__ML.histAlt()`/`__ML.histBars()` (§20) — or on a question already
+   scoring 0.8+.
 
 7. **Write the study note** into `output/study-notes/<course>-<set>.md`, same
    format as the `myopenmath` skill's step 6: a `topics:` line, then Formulas,
@@ -96,11 +97,12 @@ date and ask before you start. Never enter credentials.
   stray click on the panel — even without clicking "Continue" inside it —
   silently invalidating already-correct parts. Avoid it; re-extract fresh and
   re-verify prior parts if it's triggered by accident (§19).
-- **Histogram/graph multiple-choice options built from the current instance's
-  own data are not reliably identifiable by eye** — peak position and tail
-  shape guessing was wrong about as often as right across a long HW set, even
-  after computing exact bin counts first. Budget at most 2 tries per such part
-  and accept the loss rather than burning "See similar" attempts on it (§20).
+- **Histogram multiple-choice options carry a hidden exact `aria-label`** on a
+  `div` ancestor of each thumbnail — `__ML.histAlt()` returns them in the same
+  order as the visual A/B/C/D layout, and `__ML.histBars(alt)` parses one into
+  `[x, relFreq]` pairs to diff against your own computed bins. This is exact,
+  not a guess — use it instead of eyeballing peak position/tail shape, which
+  was wrong about as often as right (§20).
 - **Verify a data table's shape before trusting `__ML.table()`** — it assumes a
   duplicate footer row and single-column-per-variable layout that not every
   table has. Check `rows.length` against the question's stated sample size, and
