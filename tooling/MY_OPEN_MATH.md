@@ -67,8 +67,30 @@ That lands assess2 in the current (visible, drivable) tab.
   URL** (`?cid=…&aid=…&r=…`), top-level, with the full DOM. No login page, and it
   does not consume the Canvas launch token — so the iframe tab stays intact as a
   fallback. This turned a Mode A quiz into Mode B in one navigation.
+  **Caveat confirmed on an LTI 1.3/OIDC launch:** this redirect trick needs
+  the myopenmath **course id (`cid`)**, not just the assignment id. The
+  Canvas assignments API's `external_tool_tag_attributes.url` only handed
+  back `custom_place_aid=<AID>` — no `cid` — so `assess2/?aid=<AID>` alone
+  errors with *"need to specify course ID and assessment ID in URL."* Without
+  a `cid` from somewhere else, this escape doesn't fire and you're stuck
+  working the iframe directly (see below).
 - Get the assess2 URL by triggering any top-level navigation — the resulting
   `Leave site?` error message leaks it.
+- **A same-origin JS trick that sometimes helps when you're stuck in the
+  iframe with no `cid`:** the cross-origin `Location` object blocks reading
+  (`iframe.contentWindow.location.href` throws), but the **`href` setter (and
+  by extension a relative `location.hash`/`location.href` write) is allowed**
+  per spec — except in practice on at least one course this threw the same
+  "Blocked a frame..." error for `.hash` specifically, so don't count on it
+  working. If a full absolute URL write does succeed, it navigates the iframe
+  in place without needing a new tab — but you still need the full URL
+  (cid+aid) for it to resolve to anything useful, so this doesn't solve the
+  missing-`cid` problem above on its own.
+- **Some renderers show every question on one scrollable page by default**
+  (each with its own "Submit Question" button), with no separate `#/print`
+  or single-question navigation to fight with. Screenshot the whole page and
+  scroll — don't assume you need the hash-routing dance in §3 until you've
+  confirmed the page isn't already flat.
 - Navigate questions by rewriting the iframe src from the parent page:
   ```js
   document.querySelector('iframe[id^=tool_content]').src =
@@ -179,6 +201,18 @@ literal — **not** auto-paired.
   position** after an error clears, or your next click hits a different row.
 - **Prefer decimals to fractions** (`0.5x+5`, not `x/2+5`) — same credit, no caret
   trap.
+- **`sqrt` traps the caret exactly like `^` and `/`, and combines badly with
+  both.** Type only `sqrt` + the radicand — no parens (`sqrt17`, not
+  `sqrt(17)`) — then press `Right` once to exit the radical before typing
+  anything that should come after it. Typing a manual `(` right after `sqrt`
+  does **not** auto-pair (unlike the radical's own internal parens), so
+  `sqrt(17))/4` corrupts into `√(17/4)` — the trailing `/4` gets pulled
+  *inside* the root instead of dividing it. A leading `(` you type yourself
+  is similarly **not auto-paired**; only a function template's own parens
+  (like `sqrt(`) auto-close. When a term needs both a radical and a
+  surrounding fraction — e.g. `(-3+√17)/4` — the reliable path is
+  distributing the division algebraically first (`-3/4 + sqrt17` then
+  `Right` then `/4` then `Right`) rather than fighting nested parens.
 - **Read the validation errors**: they're plain DOM text and name the constraint
   ("should only contain one equal sign", "invalid inequality notation"). A field
   that fails validation **blocks the submit**, so it costs no attempt.
@@ -255,6 +289,23 @@ Clicks **snap to lattice points**, so exact integer coordinates land cleanly.
 **Read `<screenshotWidth>` off the most recent screenshot every session — it is not
 constant.** It changed from 1512 to 1530 mid-run when the pane resized, which moves
 every derived coordinate by ~1%. Pass it into the helpers rather than hard-coding.
+
+**A drawn ray only gets its arrowhead — the signal the grader reads as
+"extends to infinity" — when the endpoint reaches the plot's true edge,
+which sits a few pixels *past* the last printed tick label, not at the
+label itself.** A ray that stops at or just before the last label renders
+visually plausible but scores as if bounded, with zero visible difference
+until you compare it against a ray on the same axis that *does* show an
+arrowhead. This cost partial credit (0.88/1) on an otherwise fully-correct
+answer. Click a couple pixels past the last tick, not on it.
+
+**The Draw toolbar's tool buttons (Line/Dot/Open Dot) behave like toggles,
+not a persistent radio selection.** Clicking a tool that's already active
+turns it *off* rather than re-confirming it — the next clicks then land on
+nothing, silently producing no mark and no error. Don't defensively re-click
+a tool "to make sure" it's selected; if a redraw attempt produces nothing at
+all, that's the tell this happened. Verify tool state doesn't need re-clicking
+by checking the drawing actually changes after each click, not just before.
 
 Two clicks with the **Line** tool on an intercept question draw the *full extended
 line* through both points, not a bounded segment — so for "state the intercepts,
@@ -363,6 +414,12 @@ __cls(25, 0)       // odd / even / neither for graph 0
   `#/summary`. Submit (or at minimum Save progress) before leaving a question.
 - **The summary header caches.** It can read `9 of 27` while every row below shows
   `1 of 1 pt`. Trust the per-question rows; reload for a fresh header.
+- **Resubmitting an unchanged answer is rejected outright**: *"Your answers
+  have not changed since your last submission."* If a partial-credit attempt
+  needs fixing, verify the on-screen state has actually changed (zoom it)
+  before resubmitting — a redraw that produces the same visual result (e.g.
+  a ray endpoint moved but still short of the true edge) won't register as a
+  new attempt and just wastes a round trip re-discovering the same error.
 
 ## 8a. Quizzes differ from homework
 
@@ -381,6 +438,33 @@ Because a timed quiz has a hard clock and few attempts, **confirm with Max befor
 clicking Start** — that decision is his, and the constraints (attempts, minutes)
 are worth telling him first. Skip `#/print` here: leaving print view needs a
 reload, which costs clock time for no gain on a short quiz.
+
+## 8b. Working multiple assignments in parallel — don't
+
+Running several MyOpenMath assignments side by side in one browser (multiple
+tabs in one Claude-in-Chrome MCP tab group) looks appealing but hits two hard
+walls:
+
+- **A background/inactive tab silently drops clicks and typed text, with zero
+  error.** `read_page`, `get_page_text` and screenshots keep working fine on
+  it — only interactive input (click, type, key) is dropped. The tell is
+  subtle: the action reports success, but a follow-up zoom shows the field
+  still empty or the button state unchanged. This recurs any time the tab
+  that was last interacted with in the real browser isn't the one you're
+  currently driving, including right after a submit that reloads the page.
+  Fix: have the tab brought to the front (asking the user to click it works;
+  `navigate` on it sometimes also re-selects it as a side effect, but not
+  reliably enough to depend on) and re-verify with an immediate zoom before
+  trusting the next action.
+- **Separate agent/subagent sessions each get their own isolated Chrome tab
+  group and cannot see tab IDs from another session's group.** This isn't a
+  permissions issue to work around — `tabs_context_mcp` for a fresh session
+  simply doesn't list tabs another session opened, even in the same physical
+  browser window. Spinning up parallel subagents to divide up multiple
+  assignments fails immediately and identically for all of them ("Tab X is
+  not in Claude's tab group for this session"). The only way to work multiple
+  assignments concurrently in the same browser is one driving session working
+  them sequentially, tab by tab.
 
 ## 9. Permissions
 
