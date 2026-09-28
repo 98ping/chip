@@ -122,6 +122,11 @@ screenshots against one time out and the run stalls in a way that looks like a
 hung page. If you close stale tabs to get there, note that closing the last one
 **dissolves the MCP tab group** — recreate it with
 `tabs_context_mcp({createIfEmpty:true})` and re-navigate.
+Closing a stale Canvas tab while other tabs remain also dissolved the group once,
+right after a launch button had opened a new MyOpenMath tab. Nothing is lost: a fresh
+group tab pointed straight at `assess2/?cid=<CID>&aid=<AID>` lands on the intro page
+with the session intact, and no relaunch is needed. To avoid it, drive the next Canvas
+page from the tab you are already in rather than closing tabs mid-run.
 
 Per question: **read → compute → fill → verify rendered value → submit.**
 
@@ -148,6 +153,35 @@ Check `read_page` output:
 | `textbox [ref] type="text"` | plain `<input>` | **`form_input`** ✅ |
 | `combobox [ref]` + options | `<select>` | **`form_input`** ✅ |
 | `textbox [ref]` (no `type`) | **MathQuill** | **click + type** ⚠️ |
+
+### Fastest path: write through the MathQuill API (6.1/6.2 → 21/21, 6.3 → 28/28)
+
+Every MathQuill box is `#mqinput-qn<ID>` backed by a hidden `#qn<ID>`, and the page
+exposes MathQuill's interface as the global `MQ`. Setting LaTeX through it fires the
+edit handler, which syncs the hidden input to ASCII, so nothing is typed:
+
+```js
+MQ(document.getElementById('mqinput-qn1000')).latex('-\\frac{11\\pi}{6}');
+document.getElementById('qn1000').value
+```
+
+The second line reads back `- (11 pi)/6`, and that value is what gets graded. This
+sidesteps every caret trap below (`^`, `/`, `sqrt`), the keypad overlay, and the Tab
+problem. Functions go in as `\cos^2\left(x\right)` (→ `cos^2(x)`), points as
+`\left(-\frac{1}{2},-\frac{\sqrt{3}}{2}\right)`. Plain `type="text"` inputs and
+`<select>`s: set `.value`, then dispatch `input` and `change`.
+
+Submit with `.click()` on the one **visible** submit button. Every label carries a
+hidden screen-reader suffix (*"Submit Question Question 12"*), so match the label on a
+prefix, and include **Submit Part** (sequential multi-part questions) alongside the
+three labels in §8.
+
+**Read the exact question text instead of zooming.** MathJax 4 keeps each formula's
+source: `MathJax.startup.document.getMathItemsWithin(wrap)` returns items whose
+`typesetRoot` is the `mjx-container` and whose `math` is the source (`180^@`,
+`(3pi)/4`, `\sqrt(2)/2`). Walk the wrap's DOM and swap each container for its source.
+`mjx-container` carries the class `MathJax`, so a class filter meant for old MathJax
+previews will silently drop every formula.
 
 **`form_input` silently fails on MathQuill.** It sets the hidden backing textarea
 without syncing the visible field — you get an empty or garbled box and a
@@ -306,6 +340,17 @@ nothing, silently producing no mark and no error. Don't defensively re-click
 a tool "to make sure" it's selected; if a redraw attempt produces nothing at
 all, that's the tell this happened. Verify tool state doesn't need re-clicking
 by checking the drawing actually changes after each click, not just before.
+
+**Unit-circle canvases** ("plot the point where the angle meets the unit circle",
+"draw the angle") mark the 16 special angles as small `<circle r="4">` elements, and
+a **Dot** click snaps to them. Take the target's `cx`/`cy` and map it through the SVG's
+`getBoundingClientRect()` and `screenshotWidth / innerWidth`, as above. For *draw the
+angle* the initial side is already drawn, so the **Line Segment** tool takes two
+clicks: the centre (the big circle's `cx`/`cy`), then the marker.
+
+A drawing answer's hidden value looks like `;;(65,64);;;;;;`. Returning it raw from
+`javascript_tool` gets the whole result replaced by *"[BLOCKED: Cookie/query string
+data]"*, so replace `;` before returning anything that includes it.
 
 Two clicks with the **Line** tool on an intercept question draw the *full extended
 line* through both points, not a bounded segment — so for "state the intercepts,
